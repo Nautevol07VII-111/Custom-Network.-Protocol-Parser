@@ -9,3 +9,15 @@ typedef struct {
     unsigned char checksum;   
     unsigned char end_byte;   
 } Packet;
+
+//Constants
+#define START_BYTE 0xAA
+#define END_BYTE 0xBB
+#define MAX_PAYLOAD 32
+
+
+//declaring functions
+void create_packet(Packet *packet, unsigned char length);
+int parse_packet(Packet *packet);
+
+#endif
