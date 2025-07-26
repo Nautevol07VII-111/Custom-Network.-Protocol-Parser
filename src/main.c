@@ -39,3 +39,10 @@ int parse_packet(Packet *packet) {
     }
     return 0; //no error found;condition met
 }
+
+int main() {
+    //Simulates sending a packet
+    Packet packet; //creating a new instance of the packet object(struct) from the protocol.h file
+    unsigned char data[] = {0x01, 0x02, 0x03}; // Example data
+    create_packet(&packet, data, 3);
+}
