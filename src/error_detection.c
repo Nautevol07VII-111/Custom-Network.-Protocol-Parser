@@ -6,4 +6,9 @@ unsigned char calculate_checksum(const unsigned char *data, int length) {
         checksum ^= data[i];
     }
     return checksum;
+} 
+
+int verify_checksum(const unsigned char *data, int length, unsigned char expected_checksum) {
+    unsigned char computed_checksum = calculate_checksum(data, length);
+    return computed_checksum == expected_checksum;
 }
