@@ -42,7 +42,19 @@ int parse_packet(Packet *packet) {
 
 int main() {
     //Simulates sending a packet
-    Packet packet; //creating a new instance of the packet object(struct) from the protocol.h file
+    Packet packet; //creating a new instance of the packet class(struct) from the protocol.h file
     unsigned char data[] = {0x01, 0x02, 0x03}; // Example data
     create_packet(&packet, data, 3);
+
+    // Simulate receiving and parsing
+    printf("Parsing packet...\n");
+    if (parse_packet(&packet) == 0) {
+        printf("Packet valid! Payload: ");
+        for (int i = 0; i < packet.length; i++) {
+            printf("0x%02X ", packet.payload[i]);
+        }
+        print("\n");
+    }
+
+    return 0;
 }
