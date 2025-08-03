@@ -1,60 +1,32 @@
 #include <stdio.h>
 #include <string.h>
 #include "../include/protocol.h"
-
-//gets the sum of payload from byte array
-unsigned char calculate_checksum(unsigned char *data, unsigned char length) {
-    unsigned char sum = 0;
-    for (int i = 0; i < length; i++) {
-        sum += data[i];
-    }
-    return sum;
-}
-
-void create_packet(Packet *packet, unsigned char *data, unsigned char length) {
-    if (length > MAX_PAYLOAD) {
-        printf("Error: Payload too large\n");
-        return;
-    }
-    packet->start_byte = START_BYTE;
-    packet->length = length;
-    memcpy(packet->payload, data, length); //copies data to payload
-    packet->checksum = calculate_checksum(data, length);
-    packet->end_byte = END_BYTE;
-}
-
-int parse_packet(Packet *packet) {
-    if (packet->start_byte != START_BYTE || packet->end_byte != END_BYTE) {
-        printf("Error: Invalid start or end byte\n");
-        return -1;
-    }
-    if (packet->length > MAX_PAYLOAD) {
-        printf("Error: Invalid length\n");
-        return -1;
-    }
-    unsigned char calc_checksum calculate_checksum(packet->payload, packet->length);
-    if (calc_checksum != packet->checksum) {
-        printf("Error: Checksum mismatch\n");
-        return -1;
-    }
-    return 0; //no error found;condition met
-}
+#include "error_detection.h"
+#include "protocol_validation.h"
+#include "command_processing.h"
+#include "data_integrity.h"
 
 int main() {
-    //Simulates sending a packet
-    Packet packet; //creating a new instance of the packet class(struct) from the protocol.h file
-    unsigned char data[] = {0x01, 0x02, 0x03}; // Example data
-    create_packet(&packet, data, 3);
+    unsigned char buffer[MAX_BUFFER_SIZE] = "<LED_ON>abc";
+    int buffer_length = 8;
+    unsigned char checksum = 0xAA; //Example expected checksum
 
-    // Simulate receiving and parsing
-    printf("Parsing packet...\n");
-    if (parse_packet(&packet) == 0) {
-        printf("Packet valid! Payload: ");
-        for (int i = 0; i < packet.length; i++) {
-            printf("0x%02X ", packet.payload[i]);
-        }
-        print("\n");
+    if (is_valid_protocol(buffer, buffer_length)) {
+        printf("Protocol is valid\n");
+        if (verify_checksum(buffer + 1, buffer_length -2, checksum 2)) {
+        unsigned char command[MAX_BUFFER_SIZE];
+        safe_copy(command, buffer_length -2);
+    } else {
+        printf("Checksum failed\n");
     }
-
-    return 0;
+} else {
+    printf("Invalid protocol\n");
 }
+float sensor_value;
+simulate_sensor_reading(&sensor_value);
+printf("Simulated sensor reading: %.1f\n", sensor_value);
+
+
+return 0;
+}
+
