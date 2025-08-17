@@ -1,0 +1,23 @@
+cat > .gitignore << 'EOF'
+# Compiled files
+*.o
+protocol_parser
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug files
+*.dSYM/
+EOF
