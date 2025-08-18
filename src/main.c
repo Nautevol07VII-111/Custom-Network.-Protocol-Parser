@@ -42,3 +42,17 @@ printf("Simulated sensor reading: %.1f\n", sensor_value);
 return 0;
 }
 
+
+if (is_valid_protocol(buffer, buffer_length)) {
+    printf("Text Protocol: Valid\n");
+    
+    // Convert to binary packet
+    Packet binary_packet;
+    if (text_to_binary((char*)buffer, &binary_packet)) {
+        print_packet(&binary_packet);
+        
+        // Simulate binary transmission
+        printf("\nSimulating binary transmission...\n");
+        printf("Sending %d bytes over serial/network...\n", 5 + MAX_PAYLOAD);
+    }
+}
