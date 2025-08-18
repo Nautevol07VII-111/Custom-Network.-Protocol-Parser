@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = Iinclude -Wall -g 
+CFLAGS = -I include -Wall -g
 OBJECTS = src/main.o src/error_detection.o src/protocol_validation.o src/command_processing.o src/data_integrity.o 
 
 protocol_parser: $(OBJECTS)
