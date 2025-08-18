@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino Dual-Protocol Parser - Interactive Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #00d2d3;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .protocol-flow {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .protocol-box {
+            background: rgba(22, 33, 62, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid rgba(0, 210, 211, 0.3);
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .protocol-arrow {
+            color: #00d2d3;
+            font-size: 2em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .panel {
+            background: rgba(22, 33, 62, 0.9);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 210, 211, 0.2);
+        }
+
+        .panel h2 {
+            color: #00d2d3;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            text-align: center;
+        }
+
+        .panel h3 {
+            color: #00d2d3;
+            margin: 15px 0 10px;
+            font-size: 1.1em;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #00d2d3;
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            background: rgba(15, 52, 96, 0.5);
+            border: 2px solid rgba(0, 210, 211, 0.3);
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 16px;
+            font-family: 'Consolas', monospace;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #00d2d3;
+            background: rgba(15, 52, 96, 0.8);
+        }
+
+        .quick-commands {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .cmd-btn {
+            padding: 8px 15px;
+            background: rgba(15, 52, 96, 0.8);
+            border: 1px solid rgba(0, 210, 211, 0.3);
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Consolas', monospace;
+        }
+
+        .cmd-btn:hover {
+            background: rgba(0, 210, 211, 0.2);
+            border-color: #00d2d3;
+        }
+
+        .field-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .field-label {
+            color: #00d2d3;
+            font-weight: bold;
+        }
+
+        .field-value {
+            font-family: 'Consolas', monospace;
+            color: #4a9eff;
+        }
+
+        .hex-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            min-height: 80px;
+            word-break: break-all;
+            color: #4a9eff;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+
+        .conversion-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            color: #aaa;
+            min-height: 200px;
+            white-space: pre-line;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px 20px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-process {
+            background: #00d2d3;
+            color: #000;
+        }
+
+        .btn-validate {
+            background: #2ed573;
+            color: #fff;
+        }
+
+        .btn-corrupt {
+            background: #ff6348;
+            color: #fff;
+        }
+
+        .btn-transmit {
+            background: #4a9eff;
+            color: #fff;
+        }
+
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .status-success {
+            color: #2ed573;
+            border: 1px solid rgba(46, 213, 115, 0.3);
+        }
+
+        .status-error {
+            color: #ff6348;
+            border: 1px solid rgba(255, 99, 72, 0.3);
+        }
+
+        .history {
+            grid-column: 1 / -1;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+        }
+
+        .history-item {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .history-item.success {
+            color: #2ed573;
+        }
+
+        .history-item.error {
+            color: #ff6348;
+        }
+
+        .info-box {
+            grid-column: 1 / -1;
+            background: rgba(0, 210, 211, 0.1);
+            border: 2px solid rgba(0, 210, 211, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .packet-structure {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .packet-byte {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border: 1px solid #00d2d3;
+            border-radius: 5px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .packet-byte.header {
+            background: rgba(0, 210, 211, 0.2);
+        }
+
+        .packet-byte.payload {
+            background: rgba(74, 158, 255, 0.2);
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .protocol-flow {
+                flex-direction: column;
+            }
+            .protocol-arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Arduino Dual-Protocol Network Parser</h1>
+            <p class="subtitle">Interactive demonstration of text-to-binary protocol conversion</p>
+        </header>
+
+        <div class="protocol-flow">
+            <div class="protocol-box">
+                <h3>Text Protocol</h3>
+                <code>&lt;COMMAND&gt;</code>
+            </div>
+            <div class="protocol-arrow">→</div>
+            <div class="protocol-box">
+                <h3>Binary Packet</h3>
+                <code>0xAA [LEN] [DATA] [CHK] 0xBB</code>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h3>How It Works</h3>
+            <p>This demo shows how Arduino commands in text format (like &lt;LED_ON&gt;) are converted to efficient binary packets for transmission.</p>
+            <p>The binary protocol uses: START_BYTE (0xAA) + LENGTH + PAYLOAD (max 32 bytes) + CHECKSUM + END_BYTE (0xBB)</p>
+        </div>
+
+        <div class="main-content">
+            
+            <div class="panel">
+                <h2>Text Protocol Input</h2>
+                
+                <div class="input-group">
+                    <label for="text-input">Enter Command:</label>
+                    <input type="text" id="text-input" placeholder="<LED_ON>" value="<LED_ON>">
+                </div>
+
+                <h3>Quick Commands:</h3>
+                <div class="quick-commands">
+                    <button class="cmd-btn" onclick="setCommand('LED_ON')">LED_ON</button>
+                    <button class="cmd-btn" onclick="setCommand('LED_OFF')">LED_OFF</button>
+                    <button class="cmd-btn" onclick="setCommand('TEMP_READ')">TEMP_READ</button>
+                    <button class="cmd-btn" onclick="setCommand('STATUS')">STATUS</button>
+                </div>
+
+                <div id="text-status" class="status-message">Ready for input</div>
+
+                <button class="btn-process" onclick="processCommand()">Process Command</button>
+            </div>
+
+            
+            <div class="panel">
+                <h2>Protocol Conversion</h2>
+                
+                <div class="conversion-display" id="conversion-display">
+                    Conversion details will appear here...
+                </div>
+
+                <h3>Binary Packet Visualization:</h3>
+                <div class="packet-structure" id="packet-visual">
+                    <div class="packet-byte header">START<br>0xAA</div>
+                    <div class="packet-byte header">LEN<br>0x00</div>
+                    <div class="packet-byte payload">PAYLOAD<br>...</div>
+                    <div class="packet-byte header">CHK<br>0x00</div>
+                    <div class="packet-byte header">END<br>0xBB</div>
+                </div>
+            </div>
+
+            
+            <div class="panel">
+                <h2>Binary Packet Output</h2>
+                
+                <h3>Packet Fields:</h3>
+                <div class="field-display">
+                    <span class="field-label">Start Byte:</span>
+                    <span class="field-value" id="start-byte">0xAA</span>
+                </div>
+                <div class="field-display">
+                    <span class="field-label">Length:</span>
+                    <span class="field-value" id="length">0 bytes</span>
+                </div>
+                <div class="field-display">
+                    <span class="field-label">Checksum:</span>
+                    <span class="field-value" id="checksum">0x00</span>
+                </div>
+                <div class="field-display">
+                    <span class="field-label">End Byte:</span>
+                    <span class="field-value" id="end-byte">0xBB</span>
+                </div>
+
+                <h3>Payload (Hex):</h3>
+                <div class="hex-display" id="hex-display">00 00 00 00 ...</div>
+
+                <button class="btn-validate" onclick="validatePacket()">Validate Packet</button>
+                <button class="btn-corrupt" onclick="corruptPacket()">Corrupt Checksum</button>
+                <button class="btn-transmit" onclick="transmitPacket()">Transmit Packet</button>
+            </div>
+
+            
+            <div class="panel history">
+                <h3 style="color: #00d2d3; margin-bottom: 10px;">Transmission History</h3>
+                <div id="history">
+                    <div class="history-item">Waiting for commands...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Protocol constants from protocol.h
+        const START_BYTE = 0xAA;
+        const END_BYTE = 0xBB;
+        const MAX_PAYLOAD = 32;
+
+        // Current packet state
+        let currentPacket = {
+            startByte: START_BYTE,
+            length: 0,
+            payload: new Uint8Array(MAX_PAYLOAD),
+            checksum: 0,
+            endByte: END_BYTE
+        };
+
+        // Text protocol validation
+        function validateTextProtocol(input) {
+            if (input.length < 2) {
+                return { valid: false, message: "Too short for valid protocol" };
+            }
+            if (!input.startsWith('<') || !input.endsWith('>')) {
+                return { valid: false, message: "Missing < > markers" };
+            }
+            return { valid: true, message: "Valid text protocol" };
+        }
+
+        // Extract command from <COMMAND> format
+        function extractCommand(input) {
+            if (input.startsWith('<') && input.endsWith('>')) {
+                return input.slice(1, -1);
+            }
+            return null;
+        }
+
+        // Calculate checksum (XOR based)
+        function calculateChecksum(packet) {
+            let checksum = packet.length;
+            for (let i = 0; i < packet.length; i++) {
+                checksum ^= packet.payload[i];
+            }
+            return checksum & 0xFF;
+        }
+
+        // Set quick command
+        function setCommand(cmd) {
+            document.getElementById('text-input').value = `<${cmd}>`;
+        }
+
+        // Process text command
+        function processCommand() {
+            const input = document.getElementById('text-input').value.trim();
+            const statusEl = document.getElementById('text-status');
+            
+            // Validate text protocol
+            const validation = validateTextProtocol(input);
+            if (!validation.valid) {
+                statusEl.textContent = `❌ ${validation.message}`;
+                statusEl.className = 'status-message status-error';
+                return;
+            }
+            
+            statusEl.textContent = `✓ ${validation.message}`;
+            statusEl.className = 'status-message status-success';
+            
+            // Extract command
+            const command = extractCommand(input);
+            
+            // Convert to binary packet
+            const commandBytes = new TextEncoder().encode(command);
+            currentPacket.length = Math.min(commandBytes.length, MAX_PAYLOAD);
+            currentPacket.payload = new Uint8Array(MAX_PAYLOAD);
+            currentPacket.payload.set(commandBytes.slice(0, currentPacket.length));
+            currentPacket.checksum = calculateChecksum(currentPacket);
+            
+            // Update displays
+            updateConversionDisplay(input, command);
+            updatePacketDisplay();
+            updatePacketVisualization();
+        }
+
+        // Update conversion display
+        function updateConversionDisplay(input, command) {
+            const conversionEl = document.getElementById('conversion-display');
+            const steps = `Step 1: Parse Text Input
+├─ Input: ${input}
+├─ Validate: Check for < and >
+└─ Extract: "${command}"
+
+Step 2: Convert to Binary
+├─ Encode: "${command}" → UTF-8 bytes
+├─ Length: ${currentPacket.length} bytes
+└─ Hex: ${Array.from(currentPacket.payload.slice(0, currentPacket.length))
+                .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
+                .join(' ')}
+
+Step 3: Build Packet
+├─ Start Byte: 0x${START_BYTE.toString(16).toUpperCase()}
+├─ Length: ${currentPacket.length}
+├─ Payload: [${currentPacket.length} bytes]
+├─ Checksum: 0x${currentPacket.checksum.toString(16).toUpperCase().padStart(2, '0')}
+└─ End Byte: 0x${END_BYTE.toString(16).toUpperCase()}
+
+Total Packet Size: ${5 + MAX_PAYLOAD} bytes`;
+            
+            conversionEl.textContent = steps;
+        }
+
+        // Update packet field displays
+        function updatePacketDisplay() {
+            document.getElementById('start-byte').textContent = 
+                `0x${currentPacket.startByte.toString(16).toUpperCase().padStart(2, '0')}`;
+            document.getElementById('length').textContent = 
+                `${currentPacket.length} bytes`;
+            document.getElementById('checksum').textContent = 
+                `0x${currentPacket.checksum.toString(16).toUpperCase().padStart(2, '0')}`;
+            document.getElementById('end-byte').textContent = 
+                `0x${currentPacket.endByte.toString(16).toUpperCase().padStart(2, '0')}`;
+            
+            // Update hex display
+            let hexString = '';
+            for (let i = 0; i < currentPacket.length; i += 8) {
+                const bytes = currentPacket.payload.slice(i, Math.min(i + 8, currentPacket.length));
+                hexString += Array.from(bytes)
+                    .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
+                    .join(' ') + '\n';
+            }
+            document.getElementById('hex-display').textContent = hexString.trim() || '(empty)';
+        }
+
+        // Update packet visualization
+        function updatePacketVisualization() {
+            const visual = document.getElementById('packet-visual');
+            visual.innerHTML = '';
+            
+            // Start byte
+            visual.innerHTML += `<div class="packet-byte header">START<br>0x${START_BYTE.toString(16).toUpperCase()}</div>`;
+            
+            // Length
+            visual.innerHTML += `<div class="packet-byte header">LEN<br>${currentPacket.length}</div>`;
+            
+            // Payload bytes (show first few)
+            for (let i = 0; i < Math.min(3, currentPacket.length); i++) {
+                const byte = currentPacket.payload[i];
+                visual.innerHTML += `<div class="packet-byte payload">0x${byte.toString(16).toUpperCase().padStart(2, '0')}</div>`;
+            }
+            if (currentPacket.length > 3) {
+                visual.innerHTML += `<div class="packet-byte payload">...</div>`;
+            }
+            
+            // Checksum
+            visual.innerHTML += `<div class="packet-byte header">CHK<br>0x${currentPacket.checksum.toString(16).toUpperCase().padStart(2, '0')}</div>`;
+            
+            // End byte
+            visual.innerHTML += `<div class="packet-byte header">END<br>0x${END_BYTE.toString(16).toUpperCase()}</div>`;
+        }
+
+        // Validate binary packet
+        function validatePacket() {
+            let message = '';
+            let valid = true;
+            
+            if (currentPacket.startByte !== START_BYTE) {
+                message = `Invalid start byte: 0x${currentPacket.startByte.toString(16).toUpperCase()}`;
+                valid = false;
+            } else if (currentPacket.endByte !== END_BYTE) {
+                message = `Invalid end byte: 0x${currentPacket.endByte.toString(16).toUpperCase()}`;
+                valid = false;
+            } else if (currentPacket.length > MAX_PAYLOAD) {
+                message = `Payload exceeds maximum: ${currentPacket.length} > ${MAX_PAYLOAD}`;
+                valid = false;
+            } else {
+                const expectedChecksum = calculateChecksum(currentPacket);
+                if (currentPacket.checksum !== expectedChecksum) {
+                    message = `Checksum mismatch: expected 0x${expectedChecksum.toString(16).toUpperCase()}, got 0x${currentPacket.checksum.toString(16).toUpperCase()}`;
+                    valid = false;
+                } else {
+                    message = 'Valid packet!';
+                }
+            }
+            
+            alert(message);
+            addToHistory(`Validation: ${message}`, valid);
+        }
+
+        // Corrupt packet for testing
+        function corruptPacket() {
+            currentPacket.checksum = (currentPacket.checksum + 1) & 0xFF;
+            updatePacketDisplay();
+            addToHistory('Packet corrupted (checksum modified)', false);
+        }
+
+        // Simulate packet transmission
+        function transmitPacket() {
+            const expectedChecksum = calculateChecksum(currentPacket);
+            const valid = currentPacket.checksum === expectedChecksum;
+            
+            const command = document.getElementById('text-input').value;
+            const size = 5 + MAX_PAYLOAD; // Fixed packet size
+            const status = valid ? 'Success' : 'Failed (invalid checksum)';
+            
+            addToHistory(`TX: ${command} - Size: ${size}B - ${status}`, valid);
+            
+            if (valid) {
+                alert('Packet transmitted successfully!');
+            } else {
+                alert('Transmission failed: Invalid packet!');
+            }
+        }
+
+        // Add entry to history
+        function addToHistory(message, success = true) {
+            const timestamp = new Date().toLocaleTimeString();
+            const historyEl = document.getElementById('history');
+            const entry = document.createElement('div');
+            entry.className = `history-item ${success ? 'success' : 'error'}`;
+            entry.textContent = `${timestamp} - ${message}`;
+            
+            // Add to top of history
+            if (historyEl.firstChild.textContent === 'Waiting for commands...') {
+                historyEl.innerHTML = '';
+            }
+            historyEl.insertBefore(entry, historyEl.firstChild);
+            
+            // Limit to 10 entries
+            while (historyEl.children.length > 10) {
+                historyEl.removeChild(historyEl.lastChild);
+            }
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            processCommand();
+        };
+
+        // Process on Enter key
+        document.getElementById('text-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                processCommand();
+            }
+        });
+    </script>
+</body>
+</html>
