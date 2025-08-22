@@ -226,4 +226,156 @@ class PacketVisualizer(tk.Tk):
                               bg='#16213e', fg='#00d2d3', font=('Arial', 12))
         status_label.pack(pady=5)
     
+        def create_history_panel(self, parent):
+         """Create packet history panel"""
+        frame = ttk.Frame(parent, style='Dark.TFrame')
+        frame.pack(fill='both', expand=True)
+        
+        ttk.Label(frame, text="Transmission History", style='Heading.TLabel').pack(pady=5)
+        
+        # History listbox with scrollbar
+        history_frame = tk.Frame(frame, bg='#16213e')
+        history_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        scrollbar = tk.Scrollbar(history_frame)
+        scrollbar.pack(side='right', fill='y')
+        
+        self.history_listbox = tk.Listbox(history_frame, bg='#0f3460', fg='white',
+                                        font=('Consolas', 9), selectmode='single',
+                                        yscrollcommand=scrollbar.set)
+        self.history_listbox.pack(fill='both', expand=True)
+        scrollbar.config(command=self.history_listbox.yview)
     
+    def generate_packet(self):
+        """Generate a new packet from the message"""
+        message = self.message_var.get()
+        message_bytes = message.encode('utf-8')[:32]  # Limit to 32 bytes
+        
+        self.packet = PacketStructure()
+        self.packet.length = len(message_bytes)
+        self.packet.payload = bytearray(32)
+        self.packet.payload[:len(message_bytes)] = message_bytes
+        self.packet.checksum = self.packet.calculate_checksum()
+        
+        self.update_display()
+        self.status_var.set("Packet generated successfully")
+    
+    def validate_packet(self):
+        """Validate the current packet"""
+        valid, message = self.packet.validate()
+        
+        if valid:
+            self.status_var.set(f"✓ {message}")
+            messagebox.showinfo("Validation", "Packet is valid!")
+        else:
+            self.status_var.set(f"✗ {message}")
+            messagebox.showerror("Validation Error", message)
+    
+    def corrupt_packet(self):
+        """Intentionally corrupt the packet for testing"""
+        corruption_type = random.choice(['checksum', 'start_byte', 'end_byte'])
+        
+        if corruption_type == 'checksum':
+            self.packet.checksum = (self.packet.checksum + 1) & 0xFF
+            self.status_var.set("Corrupted: Checksum modified")
+        elif corruption_type == 'start_byte':
+            self.packet.start_byte = 0xFF
+            self.status_var.set("Corrupted: Start byte modified")
+        else:
+            self.packet.end_byte = 0xFF
+            self.status_var.set("Corrupted: End byte modified")
+        
+        self.update_display()
+    
+    def transmit_packet(self):
+        """Animate packet transmission"""
+        if self.transmission_active:
+            return
+        
+        self.transmission_active = True
+        thread = threading.Thread(target=self._animate_transmission)
+        thread.daemon = True
+        thread.start()
+    
+    def _animate_transmission(self):
+        """Animation logic for packet transmission"""
+        self.canvas.delete("all")
+        width = self.canvas.winfo_width()
+        height = self.canvas.winfo_height()
+        
+        # Draw sender and receiver
+        self.canvas.create_text(50, height//2, text="SENDER", fill='#00d2d3', font=('Arial', 10, 'bold'))
+        self.canvas.create_text(width-50, height//2, text="RECEIVER", fill='#00d2d3', font=('Arial', 10, 'bold'))
+        
+        # Animate packet
+        packet_id = self.canvas.create_rectangle(60, height//2-10, 100, height//2+10, 
+                                               fill='#4a9eff', outline='')
+        
+        for x in range(60, width-100, 5):
+            self.canvas.coords(packet_id, x, height//2-10, x+40, height//2+10)
+            self.canvas.update()
+            time.sleep(0.02)
+        
+        # Add to history
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        valid, status = self.packet.validate()
+        history_entry = f"{timestamp} - Length: {self.packet.length}B - {status}"
+        self.history_listbox.insert(0, history_entry)
+        
+        self.status_var.set("Transmission complete!")
+        self.transmission_active = False
+    
+    def update_display(self):
+        """Update all displays with current packet data"""
+        # Update field displays
+        for attr, (label, format_str) in self.fields.items():
+            value = getattr(self.packet, attr)
+            label.config(text=format_str.format(value))
+        
+        # Update hex display
+        self.hex_display.delete(1.0, tk.END)
+        hex_str = ""
+        for i in range(0, self.packet.length, 8):
+            hex_str += " ".join([f"{b:02X}" for b in self.packet.payload[i:i+8]])
+            hex_str += "\n"
+        self.hex_display.insert(1.0, hex_str.strip())
+    
+    def export_packet(self):
+        """Export packet data as JSON"""
+        packet_data = {
+            "start_byte": self.packet.start_byte,
+            "length": self.packet.length,
+            "payload": list(self.packet.payload[:self.packet.length]),
+            "checksum": self.packet.checksum,
+            "end_byte": self.packet.end_byte,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        filename = f"packet_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(filename, 'w') as f:
+            json.dump(packet_data, f, indent=2)
+        
+        self.status_var.set(f"Packet exported to {filename}")
+
+def main():
+    app = PacketVisualizer()
+    
+    # Add menu bar
+    menubar = tk.Menu(app)
+    app.config(menu=menubar)
+    
+    file_menu = tk.Menu(menubar, tearoff=0)
+    menubar.add_cascade(label="File", menu=file_menu)
+    file_menu.add_command(label="Export Packet", command=app.export_packet)
+    file_menu.add_separator()
+    file_menu.add_command(label="Exit", command=app.quit)
+    
+    help_menu = tk.Menu(menubar, tearoff=0)
+    menubar.add_cascade(label="Help", menu=help_menu)
+    help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", 
+        "Arduino Packet Protocol Visualizer\nDemonstrates custom network packet structure\nfor embedded systems communication"))
+    
+    app.mainloop()
+
+if __name__ == "__main__":
+    main()
