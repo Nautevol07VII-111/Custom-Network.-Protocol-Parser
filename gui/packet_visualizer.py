@@ -1,364 +1,451 @@
 #!/usr/bin/env python3
 """
-Arduino Packet Protocol Visualizer
-A professional GUI for demonstrating custom network packet structure
-Author: Nile Jackson
+Arduino Dual-Protocol Network Parser
+Demonstrates both text-based (<COMMAND>) and binary packet protocols
+Author: [Your Name]
 """
 
 import tkinter as tk
 from tkinter import ttk, messagebox
 import struct
-import random
 import threading
 import time
 from datetime import datetime
 import json
 
-class PacketStructure:
-    """Represents the C packet structure"""
-    def __init__(self):
-        self.start_byte = 0x02  # STX
-        self.length = 0
-        self.payload = bytearray(32)
-        self.checksum = 0
-        self.end_byte = 0x03  # ETX
+
+START_BYTE = 0xAA
+END_BYTE = 0xBB
+MAX_PAYLOAD = 32
+
+class TextProtocol:
+    """Handles text-based protocol: <COMMAND>"""
+    @staticmethod
+    def validate(data):
+        """Validate text protocol format"""
+        if len(data) < 2:
+            return False, "Too short for valid protocol"
+        if not (data.startswith('<') and data.endswith('>')):
+            return False, "Missing < > markers"
+        return True, "Valid text protocol"
     
+    @staticmethod
+    def extract_command(data):
+        """Extract command from <COMMAND> format"""
+        if data.startswith('<') and data.endswith('>'):
+            return data[1:-1]
+        return None
+
+class BinaryPacket:
+    """Represents the binary packet structure from protocol.h"""
+    def __init__(self):
+        self.start_byte = START_BYTE
+        self.length = 0
+        self.payload = bytearray(MAX_PAYLOAD)
+        self.checksum = 0
+        self.end_byte = END_BYTE
+    
+    def from_text_command(self, text_command):
+        """Convert text command to binary packet"""
+        command = text_command.strip('<>')
+        command_bytes = command.encode('utf-8')[:MAX_PAYLOAD]
+        
+        self.length = len(command_bytes)
+        self.payload = bytearray(MAX_PAYLOAD)
+        self.payload[:self.length] = command_bytes
+        self.checksum = self.calculate_checksum()
+        
     def calculate_checksum(self):
-        """Calculate checksum for error detection"""
-        checksum = self.start_byte + self.length
-        checksum += sum(self.payload[:self.length])
-        checksum += self.end_byte
-        return checksum & 0xFF  # Keep only lower 8 bits
+        """Calculate checksum for packet validation"""
+        checksum = self.length
+        for i in range(self.length):
+            checksum ^= self.payload[i]  # XOR checksum
+        return checksum & 0xFF
     
     def to_bytes(self):
         """Convert packet to bytes for transmission"""
-        packet_bytes = struct.pack('B', self.start_byte)
-        packet_bytes += struct.pack('B', self.length)
-        packet_bytes += self.payload
-        packet_bytes += struct.pack('B', self.checksum)
-        packet_bytes += struct.pack('B', self.end_byte)
-        return packet_bytes
+        packet = bytearray()
+        packet.append(self.start_byte)
+        packet.append(self.length)
+        packet.extend(self.payload)
+        packet.append(self.checksum)
+        packet.append(self.end_byte)
+        return packet
     
     def validate(self):
-        """Validate packet structure"""
-        if self.start_byte != 0x02:
-            return False, "Invalid start byte"
-        if self.end_byte != 0x03:
-            return False, "Invalid end byte"
-        if self.length > 32:
-            return False, "Payload length exceeds maximum"
+        """Validate binary packet structure"""
+        if self.start_byte != START_BYTE:
+            return False, f"Invalid start byte: 0x{self.start_byte:02X}"
+        if self.end_byte != END_BYTE:
+            return False, f"Invalid end byte: 0x{self.end_byte:02X}"
+        if self.length > MAX_PAYLOAD:
+            return False, f"Payload length {self.length} exceeds maximum {MAX_PAYLOAD}"
+        
         calculated_checksum = self.calculate_checksum()
         if self.checksum != calculated_checksum:
-            return False, f"Checksum mismatch (expected: {calculated_checksum:02X}, got: {self.checksum:02X})"
-        return True, "Valid packet"
+            return False, f"Checksum mismatch (expected: 0x{calculated_checksum:02X}, got: 0x{self.checksum:02X})"
+        
+        return True, "Valid binary packet"
 
-class PacketVisualizer(tk.Tk):
+class DualProtocolVisualizer(tk.Tk):
     def __init__(self):
         super().__init__()
         
-        self.title("Arduino Packet Protocol Visualizer")
-        self.geometry("900x700")
+        self.title("Arduino Dual-Protocol Network Parser")
+        self.geometry("1100x800")
         self.configure(bg='#1a1a2e')
         
-        # Style configuration
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        self.configure_styles()
-        
-        # Packet data
-        self.packet = PacketStructure()
+        # Protocol states
+        self.text_protocol = TextProtocol()
+        self.binary_packet = BinaryPacket()
         self.transmission_active = False
-        self.packet_history = []
+        self.history = []
         
-        # Create UI
+        # Available commands
+        self.commands = [
+            "LED_ON",
+            "LED_OFF", 
+            "TEMP_READ",
+            "STATUS",
+            "RESET"
+        ]
+        
+        
         self.create_widgets()
-        self.update_display()
         
-    def configure_styles(self):
-        """Configure custom styles for widgets"""
-        # Dark theme colors
-        bg_color = '#1a1a2e'
-        fg_color = '#ffffff'
-        accent_color = '#00d2d3'
-        secondary_bg = '#16213e'
-        
-        self.style.configure('Title.TLabel', 
-                           background=bg_color, 
-                           foreground=fg_color,
-                           font=('Arial', 24, 'bold'))
-        
-        self.style.configure('Heading.TLabel',
-                           background=secondary_bg,
-                           foreground=accent_color,
-                           font=('Arial', 12, 'bold'))
-        
-        self.style.configure('Value.TLabel',
-                           background=secondary_bg,
-                           foreground=fg_color,
-                           font=('Consolas', 11))
-        
-        self.style.configure('Dark.TFrame',
-                           background=secondary_bg,
-                           relief='flat',
-                           borderwidth=2)
-    
     def create_widgets(self):
         """Create all GUI widgets"""
-        # Title
+       
         title_frame = tk.Frame(self, bg='#1a1a2e')
         title_frame.pack(fill='x', pady=10)
         
-        title = ttk.Label(title_frame, text="Arduino Packet Protocol Visualizer", 
-                         style='Title.TLabel')
+        title = tk.Label(title_frame, text="Arduino Dual-Protocol Network Parser", 
+                        font=('Arial', 24, 'bold'), bg='#1a1a2e', fg='#00d2d3')
         title.pack()
         
-        # Main container
+        subtitle = tk.Label(title_frame, text="Text Protocol (<COMMAND>) ↔ Binary Packet Conversion", 
+                           font=('Arial', 12), bg='#1a1a2e', fg='#888')
+        subtitle.pack()
+        
+        
         main_container = tk.Frame(self, bg='#1a1a2e')
         main_container.pack(fill='both', expand=True, padx=20)
         
-        # Left panel - Packet Structure
-        left_panel = tk.Frame(main_container, bg='#1a1a2e')
+        
+        left_panel = self.create_panel(main_container, "Text Protocol Input")
         left_panel.pack(side='left', fill='both', expand=True, padx=(0, 10))
+        self.create_text_protocol_section(left_panel)
         
-        self.create_packet_structure_panel(left_panel)
-        self.create_payload_panel(left_panel)
-        self.create_control_panel(left_panel)
         
-        # Right panel - Visualization
-        right_panel = tk.Frame(main_container, bg='#1a1a2e')
-        right_panel.pack(side='right', fill='both', expand=True)
+        middle_panel = self.create_panel(main_container, "Protocol Conversion")
+        middle_panel.pack(side='left', fill='both', expand=True, padx=(0, 10))
+        self.create_conversion_section(middle_panel)
         
-        self.create_visualization_panel(right_panel)
-        self.create_history_panel(right_panel)
+        
+        right_panel = self.create_panel(main_container, "Binary Packet Output")
+        right_panel.pack(side='left', fill='both', expand=True)
+        self.create_binary_packet_section(right_panel)
+        
+        
+        bottom_panel = self.create_panel(self, "Transmission History")
+        bottom_panel.pack(fill='x', padx=20, pady=(10, 20))
+        self.create_history_section(bottom_panel)
     
-    def create_packet_structure_panel(self, parent):
-        """Create packet structure display"""
-        frame = ttk.Frame(parent, style='Dark.TFrame')
-        frame.pack(fill='x', pady=(0, 10))
+    def create_panel(self, parent, title):
+        """Create a styled panel"""
+        frame = tk.Frame(parent, bg='#16213e', relief='flat', bd=2)
         
-        ttk.Label(frame, text="Packet Structure", style='Heading.TLabel').pack(pady=5)
         
-        # Create fields
-        self.fields = {}
-        field_info = [
+        title_label = tk.Label(frame, text=title, font=('Arial', 14, 'bold'),
+                              bg='#16213e', fg='#00d2d3', pady=10)
+        title_label.pack(fill='x')
+        
+        return frame
+    
+    def create_text_protocol_section(self, parent):
+        """Create text protocol input section"""
+        
+        input_frame = tk.Frame(parent, bg='#16213e')
+        input_frame.pack(fill='x', padx=15, pady=10)
+        
+        tk.Label(input_frame, text="Enter Command:", bg='#16213e', fg='white',
+                font=('Arial', 11)).pack(anchor='w', pady=5)
+        
+        self.command_var = tk.StringVar()
+        self.command_entry = tk.Entry(input_frame, textvariable=self.command_var,
+                                    bg='#0f3460', fg='white', font=('Consolas', 12),
+                                    insertbackground='white')
+        self.command_entry.pack(fill='x', pady=5)
+        self.command_entry.bind('<Return>', lambda e: self.process_text_command())
+        
+       
+        tk.Label(input_frame, text="Quick Commands:", bg='#16213e', fg='white',
+                font=('Arial', 11)).pack(anchor='w', pady=(15, 5))
+        
+        button_frame = tk.Frame(input_frame, bg='#16213e')
+        button_frame.pack(fill='x')
+        
+        for i, cmd in enumerate(self.commands):
+            btn = tk.Button(button_frame, text=cmd, 
+                          command=lambda c=cmd: self.set_command(c),
+                          bg='#0f3460', fg='white', font=('Arial', 9),
+                          relief='flat', padx=10, pady=5)
+            btn.grid(row=i//2, column=i%2, padx=5, pady=2, sticky='ew')
+        
+        button_frame.columnconfigure(0, weight=1)
+        button_frame.columnconfigure(1, weight=1)
+        
+        self.text_status_var = tk.StringVar(value="Ready for input")
+        status_label = tk.Label(input_frame, textvariable=self.text_status_var,
+                              bg='#0f3460', fg='#00d2d3', font=('Arial', 10),
+                              pady=5)
+        status_label.pack(fill='x', pady=(15, 5))
+        
+        
+        process_btn = tk.Button(input_frame, text="Process Command",
+                              command=self.process_text_command,
+                              bg='#00d2d3', fg='black', font=('Arial', 11, 'bold'),
+                              relief='flat', pady=8)
+        process_btn.pack(fill='x', pady=10)
+    
+    def create_conversion_section(self, parent):
+        """Create conversion visualization section"""
+        canvas_frame = tk.Frame(parent, bg='#16213e')
+        canvas_frame.pack(fill='both', expand=True, padx=15, pady=10)
+        
+        # Conversion visualization
+        self.conversion_canvas = tk.Canvas(canvas_frame, bg='#0f3460', height=300)
+        self.conversion_canvas.pack(fill='both', expand=True)
+        
+        # Conversion details
+        details_frame = tk.Frame(parent, bg='#16213e')
+        details_frame.pack(fill='x', padx=15, pady=10)
+        
+        self.conversion_details = tk.Text(details_frame, height=8, bg='#0f3460',
+                                        fg='white', font=('Consolas', 9),
+                                        wrap='word', state='disabled')
+        self.conversion_details.pack(fill='x')
+    
+    def create_binary_packet_section(self, parent):
+        """Create binary packet display section"""
+        # Packet structure display
+        struct_frame = tk.Frame(parent, bg='#16213e')
+        struct_frame.pack(fill='x', padx=15, pady=10)
+        
+        tk.Label(struct_frame, text="Packet Structure:", bg='#16213e', fg='white',
+                font=('Arial', 11, 'bold')).pack(anchor='w', pady=5)
+        
+        # Create field displays
+        self.packet_fields = {}
+        fields = [
             ("Start Byte", "start_byte", "0x{:02X}"),
             ("Length", "length", "{} bytes"),
             ("Checksum", "checksum", "0x{:02X}"),
             ("End Byte", "end_byte", "0x{:02X}")
         ]
         
-        for label, attr, format_str in field_info:
-            field_frame = tk.Frame(frame, bg='#16213e')
-            field_frame.pack(fill='x', padx=10, pady=5)
+        for label, attr, fmt in fields:
+            field_frame = tk.Frame(struct_frame, bg='#0f3460')
+            field_frame.pack(fill='x', pady=2)
             
             tk.Label(field_frame, text=f"{label}:", width=15, anchor='w',
-                    bg='#16213e', fg='#00d2d3', font=('Arial', 11)).pack(side='left')
+                    bg='#0f3460', fg='#00d2d3', font=('Arial', 10)).pack(side='left', padx=10)
             
-            value_label = tk.Label(field_frame, text="", bg='#0f3460', fg='white',
-                                 font=('Consolas', 11), width=20, anchor='w')
-            value_label.pack(side='left', padx=5, fill='x', expand=True)
+            value_label = tk.Label(field_frame, text=fmt.format(0), 
+                                 bg='#0f3460', fg='white', font=('Consolas', 10))
+            value_label.pack(side='left')
             
-            self.fields[attr] = (value_label, format_str)
-    
-    def create_payload_panel(self, parent):
-        """Create payload input panel"""
-        frame = ttk.Frame(parent, style='Dark.TFrame')
-        frame.pack(fill='x', pady=(0, 10))
+            self.packet_fields[attr] = (value_label, fmt)
         
-        ttk.Label(frame, text="Payload Data", style='Heading.TLabel').pack(pady=5)
+        # Payload hex view
+        tk.Label(struct_frame, text="Payload (Hex):", bg='#16213e', fg='white',
+                font=('Arial', 11, 'bold')).pack(anchor='w', pady=(15, 5))
         
-        # Message input
-        input_frame = tk.Frame(frame, bg='#16213e')
-        input_frame.pack(fill='x', padx=10, pady=5)
-        
-        tk.Label(input_frame, text="Message:", bg='#16213e', fg='#00d2d3',
-                font=('Arial', 11)).pack(side='left', padx=5)
-        
-        self.message_var = tk.StringVar(value="Hello Arduino!")
-        self.message_entry = tk.Entry(input_frame, textvariable=self.message_var,
-                                    bg='#0f3460', fg='white', font=('Consolas', 11))
-        self.message_entry.pack(side='left', fill='x', expand=True, padx=5)
-        
-        # Hex display
-        hex_frame = tk.Frame(frame, bg='#16213e')
-        hex_frame.pack(fill='x', padx=10, pady=5)
-        
-        tk.Label(hex_frame, text="Hex View:", bg='#16213e', fg='#00d2d3',
-                font=('Arial', 11)).pack(anchor='w')
-        
-        self.hex_display = tk.Text(hex_frame, height=3, bg='#0f3460', fg='white',
-                                 font=('Consolas', 9), wrap='word')
+        self.hex_display = tk.Text(struct_frame, height=4, bg='#0f3460',
+                                 fg='#4a9eff', font=('Consolas', 9),
+                                 wrap='word', state='disabled')
         self.hex_display.pack(fill='x', pady=5)
+        
+        # Binary packet actions
+        action_frame = tk.Frame(parent, bg='#16213e')
+        action_frame.pack(fill='x', padx=15, pady=10)
+        
+        tk.Button(action_frame, text="Validate Packet",
+                 command=self.validate_binary_packet,
+                 bg='#2ed573', fg='white', font=('Arial', 10),
+                 relief='flat', pady=5).pack(fill='x', pady=2)
+        
+        tk.Button(action_frame, text="Corrupt Checksum",
+                 command=self.corrupt_packet,
+                 bg='#ff6348', fg='white', font=('Arial', 10),
+                 relief='flat', pady=5).pack(fill='x', pady=2)
+        
+        tk.Button(action_frame, text="Transmit Packet",
+                 command=self.transmit_packet,
+                 bg='#4a9eff', fg='white', font=('Arial', 10),
+                 relief='flat', pady=5).pack(fill='x', pady=2)
     
-    def create_control_panel(self, parent):
-        """Create control buttons"""
-        frame = tk.Frame(parent, bg='#1a1a2e')
-        frame.pack(fill='x', pady=10)
-        
-        buttons = [
-            ("Generate Packet", self.generate_packet, '#00d2d3'),
-            ("Validate", self.validate_packet, '#2ed573'),
-            ("Transmit", self.transmit_packet, '#4a9eff'),
-            ("Corrupt", self.corrupt_packet, '#ff6348')
-        ]
-        
-        for text, command, color in buttons:
-            btn = tk.Button(frame, text=text, command=command,
-                          bg=color, fg='black' if color != '#ff6348' else 'white',
-                          font=('Arial', 10, 'bold'), relief='flat',
-                          padx=15, pady=8)
-            btn.pack(side='left', padx=5, expand=True, fill='x')
-    
-    def create_visualization_panel(self, parent):
-        """Create packet transmission visualization"""
-        frame = ttk.Frame(parent, style='Dark.TFrame')
-        frame.pack(fill='x', pady=(0, 10))
-        
-        ttk.Label(frame, text="Transmission Visualization", style='Heading.TLabel').pack(pady=5)
-        
-        # Canvas for animation
-        self.canvas = tk.Canvas(frame, bg='#0f3460', height=150)
-        self.canvas.pack(fill='x', padx=10, pady=10)
-        
-        # Status display
-        self.status_var = tk.StringVar(value="Ready")
-        status_label = tk.Label(frame, textvariable=self.status_var,
-                              bg='#16213e', fg='#00d2d3', font=('Arial', 12))
-        status_label.pack(pady=5)
-    
-        def create_history_panel(self, parent):
-         """Create packet history panel"""
-        frame = ttk.Frame(parent, style='Dark.TFrame')
-        frame.pack(fill='both', expand=True)
-        
-        ttk.Label(frame, text="Transmission History", style='Heading.TLabel').pack(pady=5)
+    def create_history_section(self, parent):
+        """Create transmission history section"""
+        history_frame = tk.Frame(parent, bg='#16213e')
+        history_frame.pack(fill='both', expand=True, padx=15, pady=10)
         
         # History listbox with scrollbar
-        history_frame = tk.Frame(frame, bg='#16213e')
-        history_frame.pack(fill='both', expand=True, padx=10, pady=5)
-        
         scrollbar = tk.Scrollbar(history_frame)
         scrollbar.pack(side='right', fill='y')
         
         self.history_listbox = tk.Listbox(history_frame, bg='#0f3460', fg='white',
                                         font=('Consolas', 9), selectmode='single',
-                                        yscrollcommand=scrollbar.set)
+                                        yscrollcommand=scrollbar.set, height=5)
         self.history_listbox.pack(fill='both', expand=True)
         scrollbar.config(command=self.history_listbox.yview)
     
-    def generate_packet(self):
-        """Generate a new packet from the message"""
-        message = self.message_var.get()
-        message_bytes = message.encode('utf-8')[:32]  # Limit to 32 bytes
-        
-        self.packet = PacketStructure()
-        self.packet.length = len(message_bytes)
-        self.packet.payload = bytearray(32)
-        self.packet.payload[:len(message_bytes)] = message_bytes
-        self.packet.checksum = self.packet.calculate_checksum()
-        
-        self.update_display()
-        self.status_var.set("Packet generated successfully")
+    def set_command(self, cmd):
+        """Set command in entry field"""
+        self.command_var.set(f"<{cmd}>")
+        self.command_entry.focus()
     
-    def validate_packet(self):
-        """Validate the current packet"""
-        valid, message = self.packet.validate()
+    def process_text_command(self):
+        """Process text command and convert to binary"""
+        text_input = self.command_var.get().strip()
+        
+        # Validate text protocol
+        valid, message = self.text_protocol.validate(text_input)
+        
+        if not valid:
+            self.text_status_var.set(f"❌ {message}")
+            return
+        
+        self.text_status_var.set(f"✓ {message}")
+        
+        # Extract command
+        command = self.text_protocol.extract_command(text_input)
+        
+        # Convert to binary packet
+        self.binary_packet.from_text_command(text_input)
+        
+        # Update displays
+        self.update_packet_display()
+        self.animate_conversion(text_input, command)
+    
+    def update_packet_display(self):
+        """Update binary packet field displays"""
+        # Update field values
+        for attr, (label, fmt) in self.packet_fields.items():
+            value = getattr(self.binary_packet, attr)
+            label.config(text=fmt.format(value))
+        
+        # Update hex display
+        self.hex_display.config(state='normal')
+        self.hex_display.delete(1.0, tk.END)
+        
+        hex_str = ""
+        for i in range(0, self.binary_packet.length, 8):
+            hex_bytes = self.binary_packet.payload[i:min(i+8, self.binary_packet.length)]
+            hex_str += " ".join([f"{b:02X}" for b in hex_bytes]) + "\n"
+        
+        self.hex_display.insert(1.0, hex_str.strip())
+        self.hex_display.config(state='disabled')
+    
+    def animate_conversion(self, text_input, command):
+        """Animate the conversion process"""
+        self.conversion_canvas.delete("all")
+        
+        # Show conversion steps
+        self.conversion_details.config(state='normal')
+        self.conversion_details.delete(1.0, tk.END)
+        
+        details = f"""Conversion Process:
+1. Text Input: {text_input}
+2. Extract Command: {command}
+3. Convert to Bytes: {command.encode('utf-8').hex()}
+4. Calculate Length: {len(command)} bytes
+5. Calculate Checksum: 0x{self.binary_packet.checksum:02X}
+6. Build Binary Packet: {self.binary_packet.to_bytes().hex()}
+"""
+        self.conversion_details.insert(1.0, details)
+        self.conversion_details.config(state='disabled')
+        
+        # Visual animation
+        width = self.conversion_canvas.winfo_width()
+        height = self.conversion_canvas.winfo_height()
+        
+        if width > 1:  # Canvas is rendered
+            # Draw conversion arrow
+            self.conversion_canvas.create_text(width//2, 50, text="Text → Binary",
+                                             fill='#00d2d3', font=('Arial', 14, 'bold'))
+            
+            # Animate data flow
+            y = 100
+            steps = [
+                f"Input: {text_input}",
+                f"Command: {command}",
+                f"Length: {self.binary_packet.length}",
+                f"Checksum: 0x{self.binary_packet.checksum:02X}",
+                "Packet Ready!"
+            ]
+            
+            for i, step in enumerate(steps):
+                self.conversion_canvas.create_text(width//2, y + i*30, text=step,
+                                                 fill='white', font=('Consolas', 10))
+    
+    def validate_binary_packet(self):
+        """Validate the binary packet"""
+        valid, message = self.binary_packet.validate()
         
         if valid:
-            self.status_var.set(f"✓ {message}")
-            messagebox.showinfo("Validation", "Packet is valid!")
+            messagebox.showinfo("Validation Result", f"✓ {message}")
         else:
-            self.status_var.set(f"✗ {message}")
-            messagebox.showerror("Validation Error", message)
+            messagebox.showerror("Validation Failed", f"✗ {message}")
+        
+        # Add to history
+        self.add_to_history(f"Validation: {message}", valid)
     
     def corrupt_packet(self):
-        """Intentionally corrupt the packet for testing"""
-        corruption_type = random.choice(['checksum', 'start_byte', 'end_byte'])
-        
-        if corruption_type == 'checksum':
-            self.packet.checksum = (self.packet.checksum + 1) & 0xFF
-            self.status_var.set("Corrupted: Checksum modified")
-        elif corruption_type == 'start_byte':
-            self.packet.start_byte = 0xFF
-            self.status_var.set("Corrupted: Start byte modified")
-        else:
-            self.packet.end_byte = 0xFF
-            self.status_var.set("Corrupted: End byte modified")
-        
-        self.update_display()
+        """Corrupt the packet checksum for testing"""
+        self.binary_packet.checksum = (self.binary_packet.checksum + 1) & 0xFF
+        self.update_packet_display()
+        self.add_to_history("Packet corrupted (checksum modified)", False)
     
     def transmit_packet(self):
-        """Animate packet transmission"""
+        """Simulate packet transmission"""
         if self.transmission_active:
             return
         
         self.transmission_active = True
-        thread = threading.Thread(target=self._animate_transmission)
-        thread.daemon = True
-        thread.start()
-    
-    def _animate_transmission(self):
-        """Animation logic for packet transmission"""
-        self.canvas.delete("all")
-        width = self.canvas.winfo_width()
-        height = self.canvas.winfo_height()
         
-        # Draw sender and receiver
-        self.canvas.create_text(50, height//2, text="SENDER", fill='#00d2d3', font=('Arial', 10, 'bold'))
-        self.canvas.create_text(width-50, height//2, text="RECEIVER", fill='#00d2d3', font=('Arial', 10, 'bold'))
-        
-        # Animate packet
-        packet_id = self.canvas.create_rectangle(60, height//2-10, 100, height//2+10, 
-                                               fill='#4a9eff', outline='')
-        
-        for x in range(60, width-100, 5):
-            self.canvas.coords(packet_id, x, height//2-10, x+40, height//2+10)
-            self.canvas.update()
-            time.sleep(0.02)
+        # Validate before transmission
+        valid, status = self.binary_packet.validate()
         
         # Add to history
         timestamp = datetime.now().strftime("%H:%M:%S")
-        valid, status = self.packet.validate()
-        history_entry = f"{timestamp} - Length: {self.packet.length}B - {status}"
-        self.history_listbox.insert(0, history_entry)
+        packet_info = f"{timestamp} - TX: {self.command_var.get()} - Size: {self.binary_packet.length + 5}B - {status}"
+        self.add_to_history(packet_info, valid)
         
-        self.status_var.set("Transmission complete!")
+        # Show success/failure message
+        if valid:
+            messagebox.showinfo("Transmission", "Packet transmitted successfully!")
+        else:
+            messagebox.showerror("Transmission Failed", f"Cannot transmit invalid packet: {status}")
+        
         self.transmission_active = False
     
-    def update_display(self):
-        """Update all displays with current packet data"""
-        # Update field displays
-        for attr, (label, format_str) in self.fields.items():
-            value = getattr(self.packet, attr)
-            label.config(text=format_str.format(value))
+    def add_to_history(self, message, success=True):
+        """Add entry to transmission history"""
+        self.history_listbox.insert(0, message)
         
-        # Update hex display
-        self.hex_display.delete(1.0, tk.END)
-        hex_str = ""
-        for i in range(0, self.packet.length, 8):
-            hex_str += " ".join([f"{b:02X}" for b in self.packet.payload[i:i+8]])
-            hex_str += "\n"
-        self.hex_display.insert(1.0, hex_str.strip())
-    
-    def export_packet(self):
-        """Export packet data as JSON"""
-        packet_data = {
-            "start_byte": self.packet.start_byte,
-            "length": self.packet.length,
-            "payload": list(self.packet.payload[:self.packet.length]),
-            "checksum": self.packet.checksum,
-            "end_byte": self.packet.end_byte,
-            "timestamp": datetime.now().isoformat()
-        }
+        # Color code based on success
+        if success:
+            self.history_listbox.itemconfig(0, fg='#2ed573')
+        else:
+            self.history_listbox.itemconfig(0, fg='#ff6348')
         
-        filename = f"packet_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        with open(filename, 'w') as f:
-            json.dump(packet_data, f, indent=2)
-        
-        self.status_var.set(f"Packet exported to {filename}")
+        # Limit history to 20 items
+        if self.history_listbox.size() > 20:
+            self.history_listbox.delete(20)
 
 def main():
-    app = PacketVisualizer()
+    app = DualProtocolVisualizer()
     
     # Add menu bar
     menubar = tk.Menu(app)
@@ -366,14 +453,19 @@ def main():
     
     file_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="File", menu=file_menu)
-    file_menu.add_command(label="Export Packet", command=app.export_packet)
+    file_menu.add_command(label="Clear History", 
+                         command=lambda: app.history_listbox.delete(0, tk.END))
     file_menu.add_separator()
     file_menu.add_command(label="Exit", command=app.quit)
     
     help_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Help", menu=help_menu)
-    help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", 
-        "Arduino Packet Protocol Visualizer\nDemonstrates custom network packet structure\nfor embedded systems communication"))
+    help_menu.add_command(label="About", 
+                         command=lambda: messagebox.showinfo("About", 
+                         "Arduino Dual-Protocol Network Parser\n\n"
+                         "Demonstrates conversion between text-based\n"
+                         "commands (<COMMAND>) and binary packet protocol\n\n"
+                         "Perfect for Arduino serial communication!"))
     
     app.mainloop()
 
